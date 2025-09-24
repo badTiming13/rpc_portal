@@ -1,0 +1,61 @@
+version: "3.9"
+
+services:
+  app:
+    build: .
+    container_name: laravel-app
+    working_dir: /app/infra
+    volumes:
+      - ./:/app
+    environment:
+      APP_ENV: local
+      APP_DEBUG: "1"
+      DB_CONNECTION: pgsql
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_DATABASE: laravel
+      DB_USERNAME: laravel
+      DB_PASSWORD: secret
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+    ports:
+      - "8000:8000"   # Laravel (artisan serve)
+      - "5173:5173"   # Vite
+    depends_on:
+      - db
+      - redis
+    command: >
+      sh -lc "
+        cd /app/infra &&
+        composer install &&
+        php artisan key:generate || true &&
+        # Запускаем PHP-сервер в фоне, чтобы контейнер не завершился
+        php artisan serve --host 0.0.0.0 --port 8000 &
+        npm install &&
+        npm run dev -- --host 0.0.0.0 --port 5173
+      "
+
+  db:
+    image: postgres:16
+    container_name: laravel-db
+    environment:
+      POSTGRES_DB: laravel
+      POSTGRES_USER: laravel
+      POSTGRES_PASSWORD: secret
+    ports:
+      - "54321:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    container_name: laravel-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+
+volumes:
+  db-data:
+  redis-data:
