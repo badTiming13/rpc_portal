@@ -21,6 +21,8 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'wallet',          // ← добавили
+        'wallet_address',  // (есть в таблице — на будущее, можно удалить если не нужно)
     ];
 
     /**
@@ -35,7 +37,7 @@ class User extends Authenticatable
 
     /**
      * Get the attributes that should be cast.
-     *
+     
      * @return array<string, string>
      */
     protected function casts(): array

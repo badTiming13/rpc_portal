@@ -3,20 +3,20 @@
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use App\Http\Controllers\PhantomAuthController;
+use App\Http\Controllers\WalletAuthController;
 
 Route::get('/', function () {
     return Inertia::render('welcome');
 })->name('home');
 
+Route::get('/wallet/nonce', [WalletAuthController::class, 'nonce']);
+Route::post('/wallet/verify', [WalletAuthController::class, 'verify']);
+Route::post('/logout', [WalletAuthController::class, 'logout'])->name('logout');
 
-Route::middleware('guest')->group(function () {
-    Route::get('/auth/phantom/nonce', [PhantomAuthController::class, 'nonce']);
-    Route::post('/auth/phantom/verify', [PhantomAuthController::class, 'verify']);
+Route::get('/me', function () {
+    return [
+        'auth' => Auth::check(),
+        'user' => Auth::user()?->only('id','name','wallet'),
+        'session_id' => session()->getId(),
+    ];
 });
-
-Route::post('/logout', function () {
-    \Illuminate\Support\Facades\Auth::logout();
-    request()->session()->invalidate();
-    request()->session()->regenerateToken();
-    return redirect('/');
-})->name('logout');

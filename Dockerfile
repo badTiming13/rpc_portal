@@ -7,7 +7,7 @@ RUN apk add --no-cache \
       libpq-dev \
       libsodium-dev \
       nodejs npm \
-  && docker-php-ext-install pdo pdo_pgsql sodium
+  && docker-php-ext-install pdo pdo_pgsql sodium bcmath
 
 # Устанавливаем Composer
 RUN curl -sS https://getcomposer.org/installer \
