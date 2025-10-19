@@ -164,12 +164,9 @@ export default function PostComposer({
             <ComposerToolbar
               onPickImages={openPickImages}
               onOpenEmoji={() => {
-                // сюда подключишь любой пикер (например, emoji-mart)
-                // временно вставляем смайл в текст:
                 setText((t) => t + ' 🙂');
               }}
               onOpenGif={() => {
-                // подключи провайдера (Giphy/Tenor). Пока — демо-URL:
                 const demo = 'https://media.tenor.com/2roX3uxz_68AAAAC/cat-computer.gif';
                 setGifUrl(demo);
               }}

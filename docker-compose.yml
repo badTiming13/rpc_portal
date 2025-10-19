@@ -7,6 +7,8 @@ services:
     working_dir: /app/infra
     volumes:
       - ./:/app
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       APP_ENV: local
       APP_DEBUG: "1"
@@ -18,6 +20,7 @@ services:
       DB_PASSWORD: secret
       REDIS_HOST: redis
       REDIS_PORT: "6379"
+      SOL_SERVICE_BASE: "http://host.docker.internal:8001"
     ports:
       - "8000:8000"   # Laravel (artisan serve)
       - "5173:5173"   # Vite
