@@ -49,7 +49,7 @@ export default function Welcome() {
           <div className="flex items-center gap-3">
             <Logo withText className="text-[#1b1b18] dark:text-[#EDEDEC]" />
             <span className="text-sm text-black/60 dark:text-white/60">
-              on-chain microblog • layer(0)
+              on-chain microblog • layer-0
             </span>
           </div>
         </div>

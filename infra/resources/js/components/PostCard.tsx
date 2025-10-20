@@ -1,16 +1,19 @@
+// resources/js/components/PostCard.tsx
 'use client';
 
+import { useMemo } from 'react';
 import Avatar from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/utils';
 import { usePage } from '@inertiajs/react';
 import { LuHeart, LuMessageCircle, LuRepeat2, LuShare2, LuEllipsis, LuExternalLink } from 'react-icons/lu';
+import { formatWhen } from '@/lib/date';
 
 export type PostCardProps = {
   id: string | number;
   author?: { name: string; handle?: string; avatar_url?: string | null; wallet?: string | null };
   text: string;
-  createdAt: string; // already formatted string
+  createdAt: string; // ISO or parseable date string
   liked?: boolean;
   likeCount?: number;
   commentCount?: number;
@@ -27,7 +30,7 @@ function firstGifFromText(text: string): string | undefined {
   // crude URL detector then pick first .gif
   const urlRegex = /(https?:\/\/[^\s]+)/gi;
   const urls = text.match(urlRegex) || [];
-  return urls.find(u => /\.gif($|\?)/i.test(u));
+  return urls.find((u) => /\.gif($|\?)/i.test(u));
 }
 
 function explorerUrl(sig: string) {
@@ -57,12 +60,13 @@ export default function PostCard(props: PostCardProps) {
 
   const shortWallet = (w?: string | null) => (w ? `${w.slice(0, 4)}…${w.slice(-4)}` : undefined);
   const gifUrl = firstGifFromText(text);
+  const prettyTime = useMemo(() => formatWhen(createdAt, { short: true }), [createdAt]);
 
   return (
     <article
       className={cn(
         'rounded-2xl bg-white p-4 shadow-[inset_0_0_0_1px_rgba(26,26,0,0.12)] dark:bg-[#161615] dark:shadow-[inset_0_0_0_1px_#2a2a2a]',
-        className
+        className,
       )}
     >
       <div className="flex items-start gap-3">
@@ -77,7 +81,7 @@ export default function PostCard(props: PostCardProps) {
             )}
 
             <div className="ml-auto flex items-center gap-2 text-xs text-[#8e8d89]">
-              <span>{createdAt}</span>
+              <span title={new Date(createdAt).toISOString()}>{prettyTime}</span>
               {tx && (
                 <a
                   className="inline-flex items-center gap-1 rounded-md border border-black/10 px-1.5 py-0.5 text-[11px] hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5"
@@ -86,7 +90,9 @@ export default function PostCard(props: PostCardProps) {
                   rel="noreferrer"
                   title="View transaction"
                 >
-                  <span className="opacity-80">{tx.slice(0, 4)}…{tx.slice(-4)}</span>
+                  <span className="opacity-80">
+                    {tx.slice(0, 4)}…{tx.slice(-4)}
+                  </span>
                   <LuExternalLink className="h-3.5 w-3.5 opacity-70" />
                 </a>
               )}
@@ -100,9 +106,7 @@ export default function PostCard(props: PostCardProps) {
             </button>
           </div>
 
-          <div className="mt-2 whitespace-pre-wrap text-[15px] leading-6">
-            {text}
-          </div>
+          <div className="mt-2 whitespace-pre-wrap text-[15px] leading-6">{text}</div>
 
           {/* Simple GIF preview if text contains a .gif URL */}
           {gifUrl && (
@@ -148,13 +152,7 @@ export default function PostCard(props: PostCardProps) {
               {likeCount}
             </Button>
 
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => onShare?.(id)}
-              className="gap-2"
-              title="Share"
-            >
+            <Button variant="ghost" size="sm" onClick={() => onShare?.(id)} className="gap-2" title="Share">
               <LuShare2 className="h-4 w-4" />
               Share
             </Button>

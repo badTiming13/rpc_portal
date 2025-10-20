@@ -1,3 +1,4 @@
+// resources/js/components/pickers/EmojiPicker.tsx
 'use client';
 
 import 'emoji-picker-element';
@@ -20,7 +21,6 @@ export default function EmojiPicker({
   const hostRef = useRef<HTMLDivElement | null>(null);
   const elRef = useRef<any>(null); // <emoji-picker> element
 
-  // derive theme from <html> when not passed
   const theme = useMemo<Theme>(() => {
     if (themeProp) return themeProp;
     const isDark = document.documentElement.classList.contains('dark');
@@ -39,34 +39,38 @@ export default function EmojiPicker({
   useEffect(() => {
     if (!elRef.current) return;
 
-    // wire selection event
     const handler = (e: CustomEvent<EmojiClickEventDetail>) => {
       const native = e.detail.unicode ?? e.detail.emoji?.unicode ?? '';
       if (native) onPick(native);
     };
     elRef.current.addEventListener('emoji-click', handler as any);
 
-    // apply theme + perf options
+    // theme + QoL
     elRef.current.setAttribute('theme', theme);
     elRef.current.setAttribute('search-autofocus', 'true');
     elRef.current.setAttribute('skin-tone-emoji', '👍');
 
-    return () => {
-      elRef.current?.removeEventListener('emoji-click', handler as any);
-    };
+    return () => elRef.current?.removeEventListener('emoji-click', handler as any);
   }, [theme, onPick]);
 
   return (
     <div
       ref={hostRef}
       className={
-        'rounded-2xl border border-black/10 bg-white shadow-xl dark:border-white/10 dark:bg-[#151515] ' +
-        className
+        // wrapper just provides drop shadow; rounding happens on the element itself
+        'shadow-xl ' + className
       }
     >
-      {/* The web component itself */}
       {/* eslint-disable-next-line react/no-unknown-property */}
-      <emoji-picker ref={elRef} style={{ width: 320, height: 370, display: 'block' }}></emoji-picker>
+      <emoji-picker
+        ref={elRef}
+        // IMPORTANT: clip the Shadow DOM by rounding the host element
+        class="block w-[320px] h-[370px] rounded-2xl overflow-hidden ring-1 ring-black/10 dark:ring-white/10"
+        style={{
+          // extra safety in case Tailwind classes are purged/changed
+          borderRadius: '16px',
+        }}
+      ></emoji-picker>
     </div>
   );
 }
