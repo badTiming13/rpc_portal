@@ -12,6 +12,7 @@ import { LuX } from 'react-icons/lu';
 import { cn } from '@/lib/utils';
 import GifPicker from '@/components/pickers/GifPicker';
 import EmojiPicker from '@/components/pickers/EmojiPicker';
+import NiceEmojiPicker from '@/components/pickers/NiceEmojiPicker';
 
 export type PostPayload = {
   text: string;
@@ -144,7 +145,7 @@ export default function PostComposer({
                 </div>
               )}
 
-              
+
             </div>
           )}
 
@@ -204,15 +205,13 @@ export default function PostComposer({
             )}
             {showEmoji && (
               <div className="absolute left-0 top-[calc(100%+8px)] z-50">
-                <EmojiPicker
-                  onPick={(emoji) => {
-                    setText((t) => t + emoji);
-                    // keep open to allow multiple inserts
-                  }}
+                <NiceEmojiPicker
+                  onPick={(emoji) => setText((t) => t + emoji)}
                   onClose={() => setShowEmoji(false)}
                 />
               </div>
             )}
+
           </div>
         </div>
       </div>
