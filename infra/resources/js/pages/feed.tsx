@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { Head, router, usePage } from '@inertiajs/react';
 
 type Post = {
-  id: number | string;
+  id: string | number;
   author: { name: string; handle?: string; avatar_url?: string | null; wallet?: string | null };
   text: string;
   createdAt: string;
@@ -15,11 +15,16 @@ type Post = {
   likeCount?: number;
   commentCount?: number;
   repostCount?: number;
+  tx?: string;
+  onchain?: boolean; // false = optimistic "Posting…", true = confirmed or at least submitted
 };
 
 export default function Feed() {
-  const { props } = usePage<{ posts: Post[]; auth?: { user?: { id: number; name: string; wallet?: string | null } } }>();
-  const posts = props.posts ?? [];
+  const { props } = usePage<{
+    posts: Post[];
+    auth?: { user?: { id: number; name: string; wallet?: string | null } };
+  }>();
+  const postsSSR = props.posts ?? [];
   const user = props.auth?.user;
   const wallet = user?.wallet ?? null;
 
@@ -27,13 +32,13 @@ export default function Feed() {
   const [onchainReady, setOnchainReady] = useState<'unknown' | 'yes' | 'no'>(wallet ? 'unknown' : 'no');
   const [initBusy, setInitBusy] = useState(false);
   const [initMsg, setInitMsg] = useState<string | null>(null);
-  const [postBusy, setPostBusy] = useState(false);
-  const [postMsg, setPostMsg] = useState<string | null>(null);
+
+  // optimistic items
+  const [localPosts, setLocalPosts] = useState<Post[]>([]);
 
   const csrf = () =>
     (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content || '';
 
-  // Check if on-chain user exists
   useEffect(() => {
     let cancelled = false;
     const run = async () => {
@@ -42,8 +47,6 @@ export default function Feed() {
       try {
         const res = await fetch(`/sol/user/${wallet}`, { credentials: 'same-origin' });
         if (!cancelled) setOnchainReady(res.ok ? 'yes' : 'no');
-      } catch {
-        if (!cancelled) setOnchainReady('no');
       } finally {
         if (!cancelled) setChecking(false);
       }
@@ -60,72 +63,101 @@ export default function Feed() {
       const username = `u_${wallet.slice(0, 6)}`;
       const res = await fetch('/sol/init-user', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRF-TOKEN': csrf(),
-        },
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf() },
         credentials: 'same-origin',
         body: JSON.stringify({ username }),
       });
       const j = await res.json().catch(() => ({}));
-
       if (res.ok && j?.ok) {
         setOnchainReady('yes');
         setInitMsg(`Initialized ✅ tx: ${j.sig}`);
-      } else if (res.status === 202) {
-        // Our Python returns 202 if PDA not visible yet; poll once more
-        setInitMsg('Init sent, waiting for confirmation…');
-        setTimeout(async () => {
-          const probe = await fetch(`/sol/user/${wallet}`, { credentials: 'same-origin' });
-          setOnchainReady(probe.ok ? 'yes' : 'no');
-        }, 1000);
       } else {
-        setInitMsg(`Failed: ${j?.error || j?.detail || res.statusText}`);
+        setInitMsg(`Failed: ${j?.detail || j?.error || res.statusText}`);
       }
-    } catch (e: any) {
-      setInitMsg(e?.message || 'Failed to init');
     } finally {
       setInitBusy(false);
     }
   };
 
-  // Use fetch (NOT Inertia router.post) for JSON API
-  const createPost = async (payload: PostPayload) => {
-    if (!payload.text?.trim()) return;
-    setPostBusy(true);
-    setPostMsg(null);
-    try {
-      const res = await fetch('/sol/post', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRF-TOKEN': csrf(),
-        },
-        credentials: 'same-origin',
-        body: JSON.stringify({ text: payload.text }),
-      });
-      const j = await res.json().catch(() => ({}));
-      if (res.ok && j?.ok) {
-        setPostMsg(`Posted ✅ tx: ${j.sig}`);
-        // refresh just posts from server (Inertia)
-        router.reload({ only: ['posts'], preserveScroll: true });
-      } else {
-        // If backend enforced init and PDA is not ready yet
-        const reason = j?.detail || j?.error || res.statusText;
-        setPostMsg(`Post failed: ${reason}`);
-        if (reason?.toString().includes('user_not_found')) {
-          setOnchainReady('no');
-        }
+  const explorerTx = (sig: string) =>
+    `https://explorer.solana.com/tx/${sig}?cluster=devnet`;
+
+  // robust poller: up to ~45s with gentle backoff; ignore 404/500/network errors
+  const pollReadPost = async (sig: string) => {
+    const attempts = 18;          // 18 tries
+    let delay = 800;              // start 0.8s
+    for (let i = 0; i < attempts; i++) {
+      try {
+        const r = await fetch(`/sol/post/${sig}`, { credentials: 'same-origin' });
+        if (r.ok) return await r.json();
+      } catch {
+        // ignore network errors and continue
       }
-    } catch (e: any) {
-      setPostMsg(e?.message || 'Post failed');
-    } finally {
-      setPostBusy(false);
+      await new Promise(res => setTimeout(res, delay));
+      // small backoff but cap ~3s
+      delay = Math.min(delay + 300, 3000);
     }
+    // give up (still on-chain, just not indexed by our read endpoint yet)
+    return null;
+  };
+
+  // send post, show optimistic, poll, then finalize (or fail-safe finalize)
+  const createPost = async (payload: PostPayload) => {
+    const base = (payload.text || '').trim();
+    const withGif = payload.gifUrl ? `${base}\n${payload.gifUrl}` : base;
+    if (!withGif) return;
+
+    const res = await fetch('/sol/post', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf() },
+      credentials: 'same-origin',
+      body: JSON.stringify({ text: withGif }),
+    });
+    const j = await res.json().catch(() => ({}));
+
+    if (!res.ok || !j?.ok) {
+      const reason = j?.detail || j?.error || res.statusText;
+      alert(`Post failed: ${reason}`);
+      if (String(reason).includes('user_not_found')) setOnchainReady('no');
+      return;
+    }
+
+    const sig: string = j.sig;
+
+    // optimistic card
+    const optimisticId = `pending-${sig}`;
+    setLocalPosts(p => [{
+      id: optimisticId,
+      author: { name: user?.name || 'You', handle: user?.wallet?.slice(0, 6), wallet: user?.wallet },
+      text: withGif,
+      createdAt: new Date().toISOString(),
+      onchain: false,
+      tx: sig,
+    }, ...p]);
+
+    // poll for readable memo
+    const read = await pollReadPost(sig);
+
+    // finalize (even if read failed — tx is submitted)
+    setLocalPosts(p => {
+      const idx = p.findIndex(x => x.id === optimisticId);
+      if (idx === -1) return p;
+      const next = [...p];
+      const onchainText = (read?.text as string | undefined) || withGif;
+      next[idx] = {
+        ...next[idx],
+        id: sig,           // stable id
+        text: onchainText, // joined chunks if we managed to read
+        onchain: true,     // flip state so UI stops saying "Posting…"
+      };
+      return next;
+    });
+
+    // refresh SSR feed in the background
+    router.reload({ only: ['posts'], preserveScroll: true });
   };
 
   const like = async (id: string | number) => {
-    // TODO: send real { post_owner, post_seq } once you store post_id from Python response
     console.log('like', id);
   };
 
@@ -134,11 +166,11 @@ export default function Feed() {
       <Head title="Feed" />
       <div className="space-y-4">
         {!user ? (
-          <div className="rounded-xl border border-black/10 bg-white p-4 text-sm dark:border-white/10 dark:bg-[#161615]">
+          <div className="rounded-xl border border-black/10 bg-white/5 p-4 text-sm dark:border-white/10">
             Please connect & sign in with your wallet to post.
           </div>
         ) : onchainReady !== 'yes' ? (
-          <div className="rounded-xl border border-black/10 bg-white p-4 dark:border-white/10 dark:bg-[#161615]">
+          <div className="rounded-xl border border-black/10 bg-white/5 p-4 dark:border-white/10">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="text-sm opacity-80">
                 {checking ? 'Checking on-chain profile…' : 'Your on-chain profile is not initialized yet.'}
@@ -147,24 +179,30 @@ export default function Feed() {
                 {initBusy ? 'Initializing…' : 'Init user on-chain'}
               </Button>
             </div>
-            {initMsg && <div className="mt-2 text-xs opacity-70 break-all">{initMsg}</div>}
+            {initMsg && <div className="mt-2 break-all text-xs opacity-70">{initMsg}</div>}
           </div>
         ) : null}
 
-        {user && onchainReady === 'yes' && (
-          <>
-            <PostComposer onSubmit={createPost} />
-            {postBusy || postMsg ? (
-              <div className="rounded-xl border border-black/10 bg-white p-3 text-xs opacity-80 dark:border-white/10 dark:bg-[#161615]">
-                {postBusy ? 'Posting…' : postMsg}
-              </div>
-            ) : null}
-          </>
-        )}
+        {user && onchainReady === 'yes' && <PostComposer onSubmit={createPost} />}
 
-        {posts.map((p) => (
+        {/* optimistic list */}
+        {localPosts.map((p) => (
+          <div key={p.id}>
+            <PostCard
+              {...p}
+              onLike={like}
+              onComment={(id) => console.log('comment', id)}
+              onRepost={(id) => console.log('repost', id)}
+              onShare={(id) => console.log('share', id)}
+            />
+         
+          </div>
+        ))}
+
+        {/* server posts (no duplication of localPosts) */}
+        {postsSSR.map((p) => (
           <PostCard
-            key={p.id}
+            key={`ssr-${p.id}`}
             {...p}
             onLike={like}
             onComment={(id) => console.log('comment', id)}

@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use App\Http\Controllers\WalletAuthController;
 use App\Http\Controllers\SolanaController;
+use App\Http\Controllers\GifController;
 
 Route::get('/', function () {
     return Inertia::render('welcome');
@@ -32,3 +33,5 @@ Route::middleware('web')->group(function () {
 Route::get('/feed', function () {
     return Inertia::render('feed');
 });
+
+Route::get('/api/gif/search', [GifController::class, 'search']);

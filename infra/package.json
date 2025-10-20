@@ -24,6 +24,7 @@
         "typescript-eslint": "^8.23.0"
     },
     "dependencies": {
+        "@emoji-mart/data": "^1.2.1",
         "@inertiajs/react": "^2.0.0",
         "@solana/wallet-adapter-base": "^0.9.27",
         "@solana/wallet-adapter-react": "^0.15.39",
@@ -39,6 +40,7 @@
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
         "concurrently": "^9.0.1",
+        "emoji-picker-element": "^1.27.0",
         "globals": "^15.14.0",
         "laravel-vite-plugin": "^2.0",
         "react": "^19.0.0",
