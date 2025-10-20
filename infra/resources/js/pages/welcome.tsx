@@ -10,6 +10,9 @@ import Avatar from '@/components/ui/Avatar';
 import Spinner from '@/components/ui/Spinner';
 import ThemeSwitcher from '@/components/ui/ThemeSwitcher';
 import ThemeProbe from '@/components/ui/ThemeProbe';
+import Logo from '@/components/Logo';
+import Footer from '@/components/Footer';
+
 
 type MockPost = {
   id: number | string;
@@ -41,6 +44,18 @@ export default function Welcome() {
 
       {/* REMOVE explicit text colors here; let AppLayout control them */}
       <div className="mx-auto max-w-6xl gap-8 p-6 lg:p-10">
+
+        <div className="mb-6 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Logo withText className="text-[#1b1b18] dark:text-[#EDEDEC]" />
+            <span className="text-sm text-black/60 dark:text-white/60">
+              on-chain microblog • layer(0)
+            </span>
+          </div>
+        </div>
+
+
+
         <h1 className="mb-6 text-2xl font-semibold">UI Showroom</h1>
 
         {/* THEME */}
@@ -137,6 +152,7 @@ export default function Welcome() {
             />
           </div>
         </Section>
+        <Footer />
       </div>
     </>
   );
