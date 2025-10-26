@@ -324,9 +324,9 @@ export default function WalletAuth() {
           )}
         </>
       ) : (
-        <div className="flex items-center gap-3">
+        <div className="flex justify-between items-center gap-3">
           <p className="text-sm text-gray-400">
-            Signed in with Phantom{publicKey ? ` — ${short(publicKey.toBase58())}` : ''}
+            {publicKey ? ` ${short(publicKey.toBase58())}` : ''}
           </p>
           <button
             onClick={logout}
@@ -340,14 +340,6 @@ export default function WalletAuth() {
 
       {err && <div className="text-xs text-red-500">{err}</div>}
       
-      {/* Debug info */}
-      {process.env.NODE_ENV === 'development' && (
-        <div className="text-xs text-gray-500 mt-2">
-          State: {connecting ? 'connecting' : connected ? 'connected' : 'disconnected'} | 
-          Wallet: {wallet?.adapter?.name || 'none'} | 
-          Pending: {pendingAction || 'none'}
-        </div>
-      )}
     </div>
   );
 }

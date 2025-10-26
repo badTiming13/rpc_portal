@@ -12,6 +12,7 @@ import ThemeSwitcher from '@/components/ui/ThemeSwitcher';
 import ThemeProbe from '@/components/ui/ThemeProbe';
 import Logo from '@/components/Logo';
 import Footer from '@/components/Footer';
+import ProfileBadge from '@/components/ProfileBadge';
 
 
 type MockPost = {
@@ -149,6 +150,19 @@ export default function Welcome() {
               likeCount={0}
               commentCount={0}
               repostCount={0}
+            />
+          </div>
+        </Section>
+        {/* PROFILE BADGE / RANK */}
+        <Section title="Profile / Rank">
+          <div className="max-w-md">
+            <ProfileBadge
+              name="Wallet 7q22UL"
+              wallet="7q22ULC3XmQf9d4LDgjUwuGokRXprsgoNsrbauCGyc2d"
+              onchain_username="u_7q22UL"
+              onchain_posts_created={34}
+              onchain_likes_received={0}
+              onchain_likes_given={0}
             />
           </div>
         </Section>

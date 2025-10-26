@@ -6,19 +6,37 @@ import Avatar from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/utils';
 import { usePage } from '@inertiajs/react';
-import { LuHeart, LuMessageCircle, LuRepeat2, LuShare2, LuEllipsis, LuExternalLink } from 'react-icons/lu';
+import {
+  LuHeart,
+  LuMessageCircle,
+  LuRepeat2,
+  LuShare2,
+  LuEllipsis,
+  LuExternalLink,
+} from 'react-icons/lu';
 import { formatWhen } from '@/lib/date';
 
 export type PostCardProps = {
   id: string | number;
-  author?: { name: string; handle?: string; avatar_url?: string | null; wallet?: string | null };
+  author?: {
+    name: string;
+    handle?: string;
+    avatar_url?: string | null;
+    wallet?: string | null;
+  };
   text: string;
-  createdAt: string; // ISO or parseable date string
+  /**
+   * can be:
+   *  - ISO string ("2025-10-20T18:36:12Z")
+   *  - Date-ish string
+   *  - already-human string ("2m", "just now")
+   */
+  createdAt: string;
   liked?: boolean;
   likeCount?: number;
   commentCount?: number;
   repostCount?: number;
-  tx?: string;          // optional: tx signature to show a badge
+  tx?: string; // tx signature badge
   onLike?: (id: string | number) => void;
   onComment?: (id: string | number) => void;
   onRepost?: (id: string | number) => void;
@@ -26,15 +44,34 @@ export type PostCardProps = {
   className?: string;
 };
 
-function firstGifFromText(text: string): string | undefined {
-  // crude URL detector then pick first .gif
+// detect media-ish url
+function isMediaUrl(u: string) {
+  return /\.(png|jpe?g|webp|avif|gif)($|\?)/i.test(u);
+}
+
+// pull first matching URLs out of text
+function extractMediaUrls(text: string): { imgUrl?: string; gifUrl?: string } {
   const urlRegex = /(https?:\/\/[^\s]+)/gi;
   const urls = text.match(urlRegex) || [];
-  return urls.find((u) => /\.gif($|\?)/i.test(u));
+
+  const gifUrl = urls.find((u) => /\.gif($|\?)/i.test(u));
+  const imgUrl = urls.find((u) => isMediaUrl(u));
+
+  return { imgUrl, gifUrl };
 }
 
 function explorerUrl(sig: string) {
   return `https://explorer.solana.com/tx/${sig}?cluster=devnet`;
+}
+
+// safely try to parse createdAt to a Date for tooltip
+function safeIsoTooltip(createdAt: string | undefined): string | undefined {
+  if (!createdAt) return undefined;
+  const d = new Date(createdAt);
+  if (Number.isNaN(d.getTime())) {
+    return undefined;
+  }
+  return d.toISOString();
 }
 
 export default function PostCard(props: PostCardProps) {
@@ -58,9 +95,46 @@ export default function PostCard(props: PostCardProps) {
     tx,
   } = props;
 
-  const shortWallet = (w?: string | null) => (w ? `${w.slice(0, 4)}…${w.slice(-4)}` : undefined);
-  const gifUrl = firstGifFromText(text);
-  const prettyTime = useMemo(() => formatWhen(createdAt, { short: true }), [createdAt]);
+  const shortWallet = (w?: string | null) =>
+    w ? `${w.slice(0, 4)}…${w.slice(-4)}` : undefined;
+
+  // parse media URLs out of post text
+  const { imgUrl, gifUrl } = useMemo(() => extractMediaUrls(text), [text]);
+
+  // remove any "standalone" media URL lines from the main rendered paragraph
+  // example:
+  //   lorem ipsum
+  //   http://.../post_media/abc.png
+  //   http://.../funny.gif
+  //
+  // becomes just "lorem ipsum"
+  const displayText = useMemo(() => {
+    const lines = text.split(/\r?\n/);
+
+    const cleaned = lines.filter((line) => {
+      const trimmed = line.trim();
+      if (!trimmed) return true; // keep blank lines for spacing
+      // if this entire line is exactly one media URL -> drop it
+      // (so we don't show raw URL above the preview)
+      const isSingleUrl =
+        /^https?:\/\/\S+$/.test(trimmed) && isMediaUrl(trimmed);
+      return !isSingleUrl;
+    });
+
+    return cleaned.join('\n');
+  }, [text]);
+
+  // prettyTime heuristic
+  const prettyTime = useMemo(() => {
+    const bruteLooksCustom =
+      createdAt.length <= 10 && /[a-zA-Z0-9]/.test(createdAt);
+    if (bruteLooksCustom && !createdAt.includes('T')) {
+      return createdAt;
+    }
+    return formatWhen(createdAt, { short: true });
+  }, [createdAt]);
+
+  const isoTooltip = safeIsoTooltip(createdAt);
 
   return (
     <article
@@ -74,14 +148,22 @@ export default function PostCard(props: PostCardProps) {
         <div className="min-w-0 grow">
           <div className="flex items-center gap-2">
             <div className="truncate font-medium">{author.name}</div>
+
             {author.handle ? (
-              <div className="truncate text-sm text-[#8e8d89]">@{author.handle}</div>
+              <div className="truncate text-sm text-[#8e8d89]">
+                @{author.handle}
+              </div>
             ) : (
-              author.wallet && <div className="truncate text-sm text-[#8e8d89]">{shortWallet(author.wallet)}</div>
+              author.wallet && (
+                <div className="truncate text-sm text-[#8e8d89]">
+                  {shortWallet(author.wallet)}
+                </div>
+              )
             )}
 
             <div className="ml-auto flex items-center gap-2 text-xs text-[#8e8d89]">
-              <span title={new Date(createdAt).toISOString()}>{prettyTime}</span>
+              <span title={isoTooltip}>{prettyTime}</span>
+
               {tx && (
                 <a
                   className="inline-flex items-center gap-1 rounded-md border border-black/10 px-1.5 py-0.5 text-[11px] hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5"
@@ -106,12 +188,36 @@ export default function PostCard(props: PostCardProps) {
             </button>
           </div>
 
-          <div className="mt-2 whitespace-pre-wrap text-[15px] leading-6">{text}</div>
+          {/* main text */}
+          <div
+            className={cn(
+              'mt-2 whitespace-pre-wrap text-[15px] leading-6',
+              // key part ↓ ensures long URLs (and any long tokens) wrap instead of blasting layout
+              'break-words',
+            )}
+          >
+            {displayText}
+          </div>
 
-          {/* Simple GIF preview if text contains a .gif URL */}
-          {gifUrl && (
+          {/* Image preview if post text includes an image-ish URL */}
+          {imgUrl && (
             <div className="mt-3 overflow-hidden rounded-xl ring-1 ring-black/10 dark:ring-white/10">
-              <img src={gifUrl} alt="gif" className="w-full max-h-[420px] object-contain bg-black/5 dark:bg-white/5" />
+              <img
+                src={imgUrl}
+                alt="attachment"
+                className="w-full max-h-[420px] object-contain bg-black/5 dark:bg-white/5"
+              />
+            </div>
+          )}
+
+          {/* GIF preview if there's a .gif URL AND it's not just the same as imgUrl */}
+          {gifUrl && gifUrl !== imgUrl && (
+            <div className="mt-3 overflow-hidden rounded-xl ring-1 ring-black/10 dark:ring-white/10">
+              <img
+                src={gifUrl}
+                alt="gif"
+                className="w-full max-h-[420px] object-contain bg-black/5 dark:bg-white/5"
+              />
             </div>
           )}
 
@@ -152,7 +258,13 @@ export default function PostCard(props: PostCardProps) {
               {likeCount}
             </Button>
 
-            <Button variant="ghost" size="sm" onClick={() => onShare?.(id)} className="gap-2" title="Share">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onShare?.(id)}
+              className="gap-2"
+              title="Share"
+            >
               <LuShare2 className="h-4 w-4" />
               Share
             </Button>

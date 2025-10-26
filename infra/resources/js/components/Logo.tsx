@@ -5,11 +5,11 @@ import { useId, useMemo } from 'react';
 import { cn } from '@/lib/utils';
 
 type LogoProps = {
-  size?: number;          // overall icon height in px
-  withText?: boolean;     // show "Layered" wordmark
-  compact?: boolean;      // tighter gap when withText
-  className?: string;     // wrapper classes
-  textClassName?: string; // wordmark classes
+  size?: number;
+  withText?: boolean;
+  compact?: boolean;
+  className?: string;
+  textClassName?: string;
 };
 
 export default function Logo({
@@ -21,7 +21,6 @@ export default function Logo({
 }: LogoProps) {
   const gid = useId();
 
-  // top -> bottom visual ramp (blue → gray)
   const colors = useMemo(
     () => ['#3B82F6', '#60A5FA', '#93C5FD'],
     []
@@ -48,15 +47,15 @@ export default function Logo({
       >
         {/* draw bottom → top so the bluest card sits on top */}
         {colors
-          .slice()            // copy
-          .reverse()          // gray bottom, blue top
+          .slice()
+          .reverse()
           .map((fill, i) => {
-            const idxFromBottom = i; // 0 = bottom-most
+            const idxFromBottom = i;
             const layersTotal = colors.length;
             const orderFromTop = layersTotal - 1 - idxFromBottom;
             const ox = orderFromTop * dx;
             const oy = orderFromTop * dy;
-            const bodyOpacity = 0.95 - orderFromTop * 0.09; // slightly more transparent deeper layers
+            const bodyOpacity = 0.95 - orderFromTop * 0.09;
 
             const clipId = `${gid}-clip-${i}`;
 

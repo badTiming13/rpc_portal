@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Http;
 use Inertia\Middleware;
 
 class HandleInertiaRequests extends Middleware
@@ -11,16 +12,12 @@ class HandleInertiaRequests extends Middleware
     /**
      * The root template that's loaded on the first page visit.
      *
-     * @see https://inertiajs.com/server-side-setup#root-template
-     *
      * @var string
      */
     protected $rootView = 'app';
 
     /**
      * Determines the current asset version.
-     *
-     * @see https://inertiajs.com/asset-versioning
      */
     public function version(Request $request): ?string
     {
@@ -28,15 +25,66 @@ class HandleInertiaRequests extends Middleware
     }
 
     /**
+     * Helper to hit python /read-user/<wallet> and grab balance + stats.
+     * If anything fails, we return safe defaults.
+     */
+    private function fetchOnchainStatsOrDefaults(?string $wallet): array
+    {
+        if (!$wallet) {
+            return [
+                'username'        => null,
+                'posts_created'   => 0,
+                'likes_received'  => 0,
+                'likes_given'     => 0,
+                'balance_sol'     => 0,
+                'exists'          => false,
+            ];
+        }
+
+        $base = rtrim(env('SOL_SERVICE_BASE', 'http://host.docker.internal:8001'), '/');
+
+        $resp = Http::get($base . '/read-user/' . $wallet);
+
+        if (!$resp->ok() || !($resp->json('ok'))) {
+            return [
+                'username'        => null,
+                'posts_created'   => 0,
+                'likes_received'  => 0,
+                'likes_given'     => 0,
+                'balance_sol'     => 0,
+                'exists'          => false,
+            ];
+        }
+
+        $u = $resp->json('user');
+
+        return [
+            'username'        => $u['username']        ?? null,
+            'posts_created'   => $u['posts_created']   ?? 0,
+            'likes_received'  => $u['likes_received']  ?? 0,
+            'likes_given'     => $u['likes_given']     ?? 0,
+            'balance_sol'     => $u['balance_sol']     ?? 0,
+            'exists'          => true,
+        ];
+    }
+
+    /**
      * Define the props that are shared by default.
-     *
-     * @see https://inertiajs.com/shared-data
      *
      * @return array<string, mixed>
      */
     public function share(Request $request): array
     {
         [$message, $author] = str(Inspiring::quotes()->random())->explode('-');
+
+        $user = $request->user();
+
+        // we only need balance if the user is logged in + has wallet
+        $onchain = $user
+            ? $this->fetchOnchainStatsOrDefaults($user->wallet ?? null)
+            : [
+                'balance_sol' => 0,
+            ];
 
         return [
             ...parent::share($request),
@@ -48,11 +96,16 @@ class HandleInertiaRequests extends Middleware
                 'author'  => trim($author),
             ],
 
-            // Делаем ленивая загрузка, и отдаем только нужные поля
+            // auth info (already there)
             'auth' => [
-                'user' => fn () => $request->user()
-                    ? $request->user()->only('id', 'name', 'wallet')
+                'user' => fn () => $user
+                    ? $user->only('id', 'name', 'wallet')
                     : null,
+            ],
+
+            // NEW: always expose walletStats to Inertia/Layout
+            'walletStats' => [
+                'balance_sol' => $onchain['balance_sol'] ?? 0,
             ],
         ];
     }
